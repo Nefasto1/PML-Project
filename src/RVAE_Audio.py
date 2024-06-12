@@ -5,6 +5,9 @@ from torch.utils.data import Dataset
 device = th.device("cuda" if th.cuda.is_available() else "cpu")
 
 class Database(Dataset):
+    """
+    Database class for the VAE applied to the Audios, we have to reshape the data from (batches, 1, notes) to (batches, seconds, notes_in_second)
+    """
     def __init__(self, X):
         self.X = th.from_numpy(X).reshape(-1, 30, 3000)
 
@@ -15,6 +18,11 @@ class Database(Dataset):
         return len(self.X)
 
 class Encoder(th.nn.Module):
+    """
+    Encoder class which extend the th.nn.Module class
+
+    Based on the causal structure proposed by Girin et all.
+    """
     def __init__(self, input_dim, latent_dim, num_layers=1):
         super(Encoder, self).__init__()
         self.fc = th.nn.Linear(in_features=input_dim*num_layers, out_features=input_dim*num_layers//30)
@@ -32,15 +40,16 @@ class Encoder(th.nn.Module):
         x = self.fc(x)
         x = x.reshape(x.shape[0], -1, self.input_dim//5)
         
-        inverse_idx = th.arange(x.shape[1]-1, -1, -1).to(device) 
-        inverse_x   = x.index_select(1, inverse_idx)              # (batch, notes, seconds) -> (batch, notes_reversed, seconds)
+        inverse_x = x.flip(1)
 
-        _, (hn_left, _) = self.input_latent(inverse_x)            # (batch, notes_reversed, seconds) -> (notes_reversed, batch, seconds)
+        inverse_z, (hn_left, _) = self.input_latent(inverse_x)            # (batch, notes_reversed, seconds) -> (notes_reversed, batch, seconds)
+
+        z = inverse_z.flip(1)
 
         hn_left = hn_left.permute(1, 0, 2)                        # (notes_reversed, batch, seconds) -> (batch, notes_reversed, seconds)
-        hn_left = hn_left.index_select(1, inverse_idx)            # (batch, notes_reversed, seconds) -> (batch, notes, seconds)
-
-        _, (hn_right, _) = self.latent_latent(hn_left)            # (batch, notes, seconds) -> (notes, batch, seconds)
+        hn_left = hn_left.flip(1)
+        
+        _, (hn_right, _) = self.latent_latent(z)            # (batch, notes, seconds) -> (notes, batch, seconds)
 
         hn_right = hn_right.permute(1, 0, 2)                      # (notes, batch, seconds) -> (batch, notes, seconds)
 
@@ -53,6 +62,11 @@ class Encoder(th.nn.Module):
         return mu, log_var
 
 class Decoder(th.nn.Module):
+    """
+    Decoder class which extend the th.nn.Module class
+
+    Based on the causal structure proposed by Girin et all.
+    """
     def __init__(self, input_dim, latent_dim, num_layers=1):
         super(Decoder, self).__init__()
         self.latent_hidden = th.nn.Linear(latent_dim, input_dim*num_layers//45)
@@ -77,6 +91,11 @@ class Decoder(th.nn.Module):
         return out
 
 class VAE(th.nn.Module):
+    """
+    VAE class which extend the th.nn.Module class
+
+    Based on the causal structure proposed by Girin et all.
+    """
     def __init__(self, input_dim, latent_dim, num_layers=1):
         super(VAE, self).__init__()
         self.encoder = Encoder(input_dim, latent_dim, num_layers)

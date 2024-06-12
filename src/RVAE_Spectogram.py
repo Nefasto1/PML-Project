@@ -1,10 +1,17 @@
+###################################################################################################
+###                                                                                             ###
+###   File containing a standard Variational Auto Encoder to be applied to the Mel-Spectograms  ###
+###                                                                                             ###
+###################################################################################################
+
 import numpy as np
 import torch as th
 from torch.utils.data import Dataset
 
-device = th.device("cuda" if th.cuda.is_available() else "cpu")
-
 class Database(Dataset):
+    """
+    Database class for the VAE applied to the Mel-Spectograms, just convert the numpy array into torch tensor
+    """
     def __init__(self, X):
         self.X = th.from_numpy(X)
 
@@ -15,6 +22,11 @@ class Database(Dataset):
         return len(self.X)
         
 class Encoder(th.nn.Module):
+    """
+    Encoder class which extend the th.nn.Module class
+
+    Based on the causal structure proposed by Girin et all.
+    """
     def __init__(self, input_dim, latent_dim, num_layers=1):
         super(Encoder, self).__init__()
 
@@ -25,15 +37,16 @@ class Encoder(th.nn.Module):
 
     def forward(self, x):
         x = x.permute(0, 2, 1)                                    # (batch, n_mels, time) -> (batch, time, n_mels)
-        inverse_idx = th.arange(x.shape[1]-1, -1, -1).to(device)
-        inverse_x   = x.index_select(1, inverse_idx)              # (batch, time, n_mels) -> (batch, time_reversed, n_mels)
+        inverse_x   = x.flip(1)                                   # (batch, time, n_mels) -> (batch, time_reversed, n_mels)
 
-        _, (hn_left, _) = self.input_latent(inverse_x)            # (batch, time_reversed, n_mels) -> (time_reversed, batch, n_mels)
+        inverse_z, (hn_left, _) = self.input_latent(inverse_x)            # (batch, time_reversed, n_mels) -> (time_reversed, batch, n_mels)
 
+        z = inverse_z.flip(1)
+        
         hn_left = hn_left.permute(1, 0, 2)                        # (time_reversed, batch, n_mels) -> (batch, time_reversed, n_mels)
-        hn_left = hn_left.index_select(1, inverse_idx)            # (batch, time_reversed, n_mels) -> (batch, time, n_mels)
+        hn_left = hn_left.flip(1)            # (batch, time_reversed, n_mels) -> (batch, time, n_mels)
 
-        _, (hn_right, _) = self.latent_latent(hn_left)            # (batch, time, n_mels) -> (time, batch, n_mels)
+        _, (hn_right, _) = self.latent_latent(z)            # (batch, time, n_mels) -> (time, batch, n_mels)
 
         hn_right = hn_right.permute(1, 0, 2)                      # (time, batch, n_mels) -> (batch, time, n_mels)
 
@@ -46,6 +59,11 @@ class Encoder(th.nn.Module):
         return mu, log_var
 
 class Decoder(th.nn.Module):
+    """
+    Decoder class which extend the th.nn.Module class
+
+    Based on the causal structure proposed by Girin et all.
+    """
     def __init__(self, input_dim, latent_dim, num_layers=1):
         super(Decoder, self).__init__()
         self.latent_hidden = th.nn.Linear(latent_dim, input_dim*num_layers)
@@ -70,6 +88,11 @@ class Decoder(th.nn.Module):
         return out
 
 class VAE(th.nn.Module):
+    """
+    VAE class which extend the th.nn.Module class
+
+    Based on the causal structure proposed by Girin et all.
+    """
     def __init__(self, input_dim, latent_dim, num_layers=1):
         super(VAE, self).__init__()
         self.encoder = Encoder(input_dim, latent_dim, num_layers)

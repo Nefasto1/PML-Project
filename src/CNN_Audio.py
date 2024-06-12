@@ -3,6 +3,9 @@ import torch as th
 from torch.utils.data import Dataset
 
 class Database(Dataset):
+    """
+    Database class for the VAE applied to the Audios, just convert the numpy array into torch tensor
+    """
     def __init__(self, X):
         self.X = th.from_numpy(X)
         
@@ -13,6 +16,12 @@ class Database(Dataset):
         return self.X[index]
 
 def make_encoder(latent_dim):
+    """
+    Function which return an Encoder block
+    Composed 4 CNN which halves the size of the data at each step followed by a linear which reduces even more the size
+
+    HARDCODED SIZE, TO BE CHANGED FOR THE PROBLEM TO SOLVE
+    """
     return th.nn.Sequential(
         th.nn.Conv1d(in_channels=1, out_channels=8, kernel_size=255, stride=2, padding=127),  # (1, 90000) -> (8, 45000) 
         th.nn.ReLU(),
@@ -27,32 +36,47 @@ def make_encoder(latent_dim):
         th.nn.ReLU(),
 
         th.nn.Flatten(1),                                                                    # (64, 5625) -> (64*5625)
-        th.nn.Linear(in_features=64*5625, out_features=1024),                                    # (64*5625) -> (1024)
+        th.nn.Linear(in_features=64*5625, out_features=1024),                                # (64*5625) -> (1024)
         th.nn.ReLU()
     )
 
 def make_decoder(latent_dim, in_dim):
+    """
+    Function which return an Decoder block
+    Composed 4 CNN which double the size of the data at each step after a fully connected layer which goes from the latent dimension to the hidden one
+    Simmetric to the encoder
+
+
+    HARDCODED SIZE, TO BE CHANGED FOR THE PROBLEM TO SOLVE
+    """
     return th.nn.Sequential(
-        th.nn.Linear(latent_dim, 1024),                                                                # (latent_dim) -> (1024)
+        th.nn.Linear(latent_dim, 1024),                                                                 # (latent_dim) -> (1024)
         th.nn.ReLU(),
         
-        th.nn.Linear(1024, 5625 * 64),                                                           # (latent_dim) -> (5625)
+        th.nn.Linear(1024, 5625 * 64),                                                                  # (latent_dim) -> (5625)
         th.nn.ReLU(),
         th.nn.Unflatten(1, (64, 5625)),                                                                 # (5625) -> (1, 5625)
 
-        th.nn.ConvTranspose1d(in_channels=64, out_channels=32, kernel_size=256, stride=2, padding=127),  # (1, 5625) -> (1, 11250) 
+        th.nn.ConvTranspose1d(in_channels=64, out_channels=32, kernel_size=256, stride=2, padding=127), # (1, 5625) -> (1, 11250) 
         th.nn.ReLU(),
 
-        th.nn.ConvTranspose1d(in_channels=32, out_channels=16, kernel_size=128, stride=2, padding=63),   # (1, 11250) -> (1, 22500) 
+        th.nn.ConvTranspose1d(in_channels=32, out_channels=16, kernel_size=128, stride=2, padding=63),  # (1, 11250) -> (1, 22500) 
         th.nn.ReLU(),
 
-        th.nn.ConvTranspose1d(in_channels=16, out_channels=8, kernel_size=64, stride=2, padding=31),   # (1, 22500) -> (1, 45000) 
+        th.nn.ConvTranspose1d(in_channels=16, out_channels=8, kernel_size=64, stride=2, padding=31),    # (1, 22500) -> (1, 45000) 
         th.nn.ReLU(),
 
-        th.nn.ConvTranspose1d(in_channels=8, out_channels=1, kernel_size=32, stride=2, padding=15),   # (1, 45000) -> (1, 90000) 
+        th.nn.ConvTranspose1d(in_channels=8, out_channels=1, kernel_size=32, stride=2, padding=15),     # (1, 45000) -> (1, 90000) 
     )
 
 class VAE(th.nn.Module):
+    """
+    Variational Auto Encoder class
+    Composed by the Encoder and a Decoder
+    Sample a latent variable from a gaussian with the outputs of the Encoder and give it in input to the Decoder
+    
+    HARDCODED SIZE, TO BE CHANGED FOR THE PROBLEM TO SOLVE
+    """
     def __init__(self, latent_dim, in_dim):
         super(VAE, self).__init__()
 
